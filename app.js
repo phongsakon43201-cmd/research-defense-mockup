@@ -6,6 +6,13 @@ const fullNames=['ด.ญ. กานต์พิชชา ใจดี','ด.ช
 const initialStatuses=['PRESENT','PRESENT','LEAVE','ABSENT',...Array(19).fill('PRESENT'),'LEAVE'];
 const defaultDev={physical:90,emotional:85,social:88,intellectual:92};
 const defaultNote='สามารถจับคู่สีและรูปทรงได้ดี รอคิวและแบ่งปันอุปกรณ์กับเพื่อนได้';
+const attendanceTrend=[
+  {label:'15 ส.ค.',present:19,total:24},
+  {label:'16 ส.ค.',present:21,total:24},
+  {label:'17 ส.ค.',present:22,total:24},
+  {label:'18 ส.ค.',present:20,total:24},
+  {label:'19 ส.ค.',present:21,total:24}
+];
 
 function cloneDevForIndex(i){
   const offset=(i%5)-2;
@@ -50,6 +57,21 @@ function statusLabel(s){return s==='APPROVED'?'อนุมัติแล้ว
 function statusClass(s){return s==='APPROVED'?'approved':s==='REJECTED'?'rejected':'pending'}
 function attendanceThai(s){return s==='PRESENT'?'มาเรียน':s==='LEAVE'?'ลา':'ขาด'}
 function nowTime(){return new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});}
+function getAttendanceCounts(){
+  const counts={PRESENT:0,LEAVE:0,ABSENT:0};
+  state.attendance.forEach(x=>counts[x.status]++);
+  counts.TOTAL=state.attendance.length;
+  counts.RATE=counts.TOTAL?Math.round(counts.PRESENT/counts.TOTAL*100):0;
+  return counts;
+}
+function renderAttendanceTrend(){
+  const chart=$('#e-attendance-trend');if(!chart)return;
+  const counts=getAttendanceCounts();
+  const points=attendanceTrend.map((point,index)=>index===attendanceTrend.length-1?{...point,present:counts.PRESENT,total:counts.TOTAL}:point).map(point=>({...point,rate:point.total?Math.round(point.present/point.total*100):0}));
+  chart.innerHTML=points.map(point=>`<div class="trend-item" aria-label="${point.label}: มาเรียน ${point.present} คนจาก ${point.total} คน คิดเป็น ${point.rate}%"><span class="trend-value">${point.rate}%</span><div class="trend-bar-track"><span class="trend-bar" style="height:${point.rate}%"></span></div><small class="trend-label">${point.label}</small><em class="trend-count">${point.present}/${point.total} คน</em></div>`).join('');
+  const latest=points[points.length-1];const summary=$('#e-trend-summary');
+  if(summary&&latest)summary.textContent=`ล่าสุด ${latest.label}: มาเรียน ${latest.present} คนจาก ${latest.total} คน (${latest.rate}%)`;
+}
 function scoreLabels(){return {physical:'ร่างกาย',emotional:'อารมณ์และจิตใจ',social:'สังคม',intellectual:'สติปัญญา'};}
 
 function renderLeave(){
@@ -68,7 +90,7 @@ $('#leave-form').onsubmit=e=>{e.preventDefault();const reason=$('#leave-reason')
 function renderAttendance(){
   $('#p-att-table').innerHTML=state.parentHistory.map(x=>`<tr><td>${x.date}</td><td><span class="attendance-pill ${x.status.toLowerCase()}">${attendanceThai(x.status)}</span></td><td>${x.time}</td></tr>`).join('');
   $('#t-att-list').innerHTML=state.attendance.map(x=>`<div class="attendance-row"><div><b>${x.name}</b><div class="subtle">${x.fullName} • ${attendanceThai(x.status)}</div></div><div class="att-actions">${['PRESENT','LEAVE','ABSENT'].map(s=>`<button class="${x.status===s?'active':''}" onclick="setAttendance('${x.id}','${s}')">${s==='PRESENT'?'มา':s==='LEAVE'?'ลา':'ขาด'}</button>`).join('')}</div></div>`).join('');
-  const c={PRESENT:0,LEAVE:0,ABSENT:0};state.attendance.forEach(x=>c[x.status]++);$('#t-present').textContent=c.PRESENT;$('#t-leave-count').textContent=c.LEAVE;$('#t-absent').textContent=c.ABSENT;$('#e-present').textContent=c.PRESENT;$('#att-summary').textContent=`สรุป: มา ${c.PRESENT} • ลา ${c.LEAVE} • ขาด ${c.ABSENT}`;$('#e-rate').textContent=Math.round(c.PRESENT/24*100)+'%';
+  const c=getAttendanceCounts();$('#t-present').textContent=c.PRESENT;$('#t-present-ratio').textContent=`จาก ${c.TOTAL} คน • ${c.RATE}%`;$('#t-present-large').textContent=`${c.PRESENT} คน`;$('#t-present-detail').textContent=`จาก ${c.TOTAL} คน • ${c.RATE}%`;$('#t-leave-count').textContent=c.LEAVE;$('#t-absent').textContent=c.ABSENT;$('#e-present').textContent=c.PRESENT;$('#att-summary').textContent=`สรุป: มา ${c.PRESENT} • ลา ${c.LEAVE} • ขาด ${c.ABSENT}`;$('#e-rate').textContent=c.RATE+'%';renderAttendanceTrend();
   const s01=state.attendance[0];$('#p-status').textContent=attendanceThai(s01.status);$('#p-status-time').textContent=s01.status==='PRESENT'?s01.time:'—';
 }
 window.setAttendance=(id,status)=>{const r=state.attendance.find(x=>x.id===id);if(!r)return;r.status=status;r.time=status==='PRESENT'?nowTime()+' น.':'-';if(id==='S01')state.parentHistory[0]={date:EXAM_DATE_LABEL,status,time:r.time};state.audit.unshift([nowTime(),'ครูอรทัย',`ATTENDANCE_${status}`]);toast(`บันทึก ${r.name}: ${attendanceThai(status)}`);render();};
@@ -124,3 +146,4 @@ function showGuide(){const s=guideSteps[gi];show(s.screen);if(s.sub)openTab(...s
 $('#guided').onclick=()=>{gi=0;showGuide();};$('#guide-next').onclick=()=>{if(gi<guideSteps.length-1){gi++;showGuide();}else{$('#guide').classList.remove('active');show('kpi');}};$('#guide-prev').onclick=()=>{if(gi>0){gi--;showGuide();}};$('#guide-close').onclick=()=>$('#guide').classList.remove('active');
 document.addEventListener('keydown',e=>{if(!$('#guide').classList.contains('active'))return;if(e.key==='ArrowRight')$('#guide-next').click();if(e.key==='ArrowLeft')$('#guide-prev').click();if(e.key==='Escape')$('#guide-close').click();});
 render();
+
